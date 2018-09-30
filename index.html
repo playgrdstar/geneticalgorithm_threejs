@@ -1,15 +1,15 @@
 <!-- Gary Ang | Ming | playgrd -->
 <!-- playgrd.com -->
 <!-- three.js port of Daniel Shiffman's Nature of Code Chapter 2-->
-<!-- Path following -->
-<!-- This code does not work smoothly. Please do correct if you see what is wrong. -->
+<!-- Separate and seek selected sphere, which will turn red when moused over -->
+
 
 
 <!DOCTYPE html>
 <html lang="en">
     <head>
         <meta charset="utf-8">
-        <title>three.js base</title>
+        <title>Nature of Code in three.js</title>
         <style>
         </style>
         <script type="text/javascript" src="./libs/three.js"></script>
@@ -22,14 +22,14 @@
 
     <div id='svg'></div>
         <script>
-
+// http://jsfiddle.net/jayfield1979/qGPTT/2/
             var p5 = new p5();
             
 
             var scene = new THREE.Scene();
             // var camera = new THREE.PerspectiveCamera( 1000, window.innerWidth / window.innerHeight, 0.1, 1000 );
             var camera = new THREE.OrthographicCamera( -10,60,-10,60, 0.1, 1000 );
-            camera.position.z = 30;
+            camera.position.z = 50;
 
             var renderer = new THREE.WebGLRenderer( { antialias: true } );
             renderer.setPixelRatio( window.devicePixelRatio );
@@ -54,53 +54,74 @@
 
             var group = new THREE.Group();
 
-            mover = new Mover();
-            mover.initialise();
+            // mover = new Mover();
+            // // mover.display();
+            // mover.initialise();
 
+            var movers = [];
+
+            for (var i = 0; i < 100; i++) {
+                var mover = new Mover();
+                mover.initialise();
+                movers.push(mover);
+            }
+            console.log(movers)
             scene.add( group );
 
             var prevFog = true;
 
-            var pathradius = 30;
-            var pathpoints = [];
+            var raycaster = new THREE.Raycaster();
+            var mouse = new THREE.Vector2();
 
+            function onMouseMove( event ) {
 
+                // calculate mouse position in normalized device coordinates
+                // (-1 to +1) for both components
 
-            var geometry = new THREE.Geometry();
+                mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+                mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
 
-            geometry.vertices.push(new THREE.Vector3( 0, 25, 0));
-            pathpoints.push(new THREE.Vector3( 0, 25, 0));
-            geometry.vertices.push(new THREE.Vector3( 5, 40, 0));
-            pathpoints.push(new THREE.Vector3( 5, 40, 0));
-            geometry.vertices.push(new THREE.Vector3( 50, 25, 0));
-            pathpoints.push(new THREE.Vector3( 50, 25, 0));
-            // geometry.vertices.push(new THREE.Vector3( 0, 25, 0));
-            // pathpoints.push(new THREE.Vector3( 0, 25, 0));
-            console.log(pathpoints);
-            console.log(geometry.vertices);
+                // console.log(mouse);
 
-            var material = new THREE.LineBasicMaterial( { color : 0xffffff } );
-            var lineObj = new THREE.Line( geometry, material );
-            group.add(lineObj);
-
-
+            }
+            document.addEventListener('mousemove', onMouseMove, false);
 
             // var wind = new THREE.Vector2(0.1,0);
             // var gravity = new THREE.Vector2(0,0.000001);
 
-
+            var pos = new THREE.Vector3();
             var render = function () {
 
                 requestAnimationFrame( render );
                 // orbit.update();
+                for (var i = 0; i < 50; i++) {
+                    movers[i].checkEdges();
+                    movers[i].applyBehaviors();
+                    movers[i].update();
+                    
+                    movers[i].display();
+                }
 
+                // update the picking ray with the camera and mouse position
+                raycaster.setFromCamera( mouse, camera );
+                // console.log('Children', scene.children[3].children);
+
+                // calculate objects intersecting the picking ray
+                var intersects = raycaster.intersectObjects( scene.children[3].children );
+
+                for ( var i = 0; i < intersects.length; i++ ) {
+
+                    intersects[ i ].object.material.color.set( 0xff0000 );
+                    pos = intersects[ i ].object.position;
+                    // console.log("hit", pos);
+
+                }
                 
-                mover.follow(pathpoints);
-                mover.update();
-                // mover.checkEdges();
-                mover.display();
+                // mover.applyForce(wind);
+                // mover.applyForce(gravity);
+
                 // group.rotation.x += 0.002;
-                // group.rotation.y += 0.002;
+                // group.rotation.y += 0.02;
                 // group.rotation.z += 0.002;
 
                 renderer.render( scene, camera );
@@ -124,8 +145,10 @@
                 this.position = new THREE.Vector3();
                 this.velocity = new THREE.Vector3();
                 this.acceleration = new THREE.Vector3();
-                this.max = new THREE.Vector3(50,50,50);
-                this.min = new THREE.Vector3(-50,-50,-50);
+
+                this.r = 12;
+                this.maxspeed = 3;
+                this.maxforce = 0.2;
 
                 var geometry = new THREE.SphereGeometry(1,10,10);
                 var material = new THREE.MeshToonMaterial({ color: 0xffffff, opacity:0.5, transparent:true, wireframe:true, emissive: 0xffffff,emissiveIntensity:0.1} );
@@ -134,19 +157,24 @@
 
                 this.initialise = function() {
                     
-                    this.position.x = 0;
-                    this.position.y = 25;
-                    this.position.z = 0;
-                    this.velocity.x = 0.01;
-                    this.velocity.y = 0.01;
-                    this.velocity.z = 0.0;
+                    this.position.x = Math.random()*25;
+                    this.position.y = Math.random()*10;
+                    this.velocity.x = 0.1;
+                    this.velocity.y = 0.1;
                     this.acceleration.x = 0.0;
                     this.acceleration.y = 0.0;
-                    this.acceleration.z = 0.0;
-                    this.mass = 10000;
+                    this.mass = 100;
                     // console.log('Initialise', this.position);                    
                 }
 
+                this.applyBehaviors = function(movers) {
+                    var separateForce = this.separate(movers);
+                    // var vector = new THREE.Vector3(25, 25, 0);
+                    var seekForce = this.seek(pos);
+                    seekForce.divideScalar(2);
+                    this.applyForce(separateForce);
+                    this.applyForce(seekForce);
+                };
 
 
                 this.applyForce = function(force){
@@ -154,11 +182,56 @@
                     this.acceleration.add(f);
                 }
 
+                this.separate = function(vehicles) {
+                    var desiredseparation = 2;
+                    var sum = new THREE.Vector3();
+                    var count = 0;
+                    // For every boid in the system, check if it's too close
+                    for (var i = 0; i < movers.length; i++) {
+                        var d = this.position.distanceTo(movers[i].position);
+                        // If the distance is greater than 0 and less than an arbitrary amount (0 when you are yourself)
+                        if ((d > 0) && (d < desiredseparation)) {
+                            // Calculate vector pointing away from neighbor
+                            var pos = this.position.clone();
+                            var diff = pos.sub(movers[i].position);
+                            diff.normalize();
+                            diff.divideScalar(d);        // Weight by distance
+                            sum.add(diff);
+                            count++;            // Keep track of how many
+                        }
+                    }
+                    // Average -- divide by how many
+                    if (count > 0) {
+                    sum.divideScalar(count);
+                    // Our desired vector is the average scaled to maximum speed
+                    sum.normalize();
+                    sum.multiplyScalar(this.maxspeed);
+                    // Implement Reynolds: Steering = Desired - Velocity
+                    sum.sub(this.velocity);
+                    // sum.limit(this.maxforce);
+                    }
+                    return sum;
+                };
+
+                this.seek = function(target) {
+                    var tgt = target.clone();
+                    var desired = tgt.sub(this.position);  // A vector pointing from the location to the target
+
+                    // Normalize desired and scale to maximum speed
+                    desired.normalize();
+                    desired.multiplyScalar(this.maxspeed);
+                    des = desired.clone();
+                    // Steering = Desired minus velocity
+                    var steer = des.sub(this.velocity);
+                    // steer.limit(this.maxforce);  // Limit to maximum steering force
+                    return steer;
+                };
+
 
                 this.update = function() {
                     
                     this.velocity.add(this.acceleration);
-                    this.velocity.clamp(this.min, this.max);
+                    // this.velocity.clamp(this.min, this.max);
                     this.position.add(this.velocity);
                     this.acceleration.multiplyScalar(0);
                     // console.log('Position', this.position);
@@ -168,7 +241,6 @@
                 this.display = function(){
                     sphere.position.x = this.position.x;
                     sphere.position.y = this.position.y;
-                    sphere.position.z = this.position.z;
                     // console.log(sphere.position);
 
                 }
@@ -194,121 +266,14 @@
                     else if (this.position.y < 0){
                         this.position.y = 0;
                         this.velocity.y *= -1;
-                    } 
-                    if (this.position.z > 50){
-                        this.position.z = 50;
-                        this.velocity.z *= -1;
-                    }
-                    else if (this.position.z < 0){
-                        this.position.z = 0;
-                        this.velocity.z *= -1;
-                    }                      
-                }
-
-                this.follow = function(p) {
-                // Predict location 50 (arbitrary choice) frames ahead
-                // This could be based on speed
-                var predict = this.velocity.clone();
-                predict.normalize();
-                predict.multiplyScalar(50);
-                var pos = this.position.clone()
-                var predictLoc = pos.add(predict);
-
-                // Now we must find the normal to the path from the predicted location
-                // We look at the normal for each line segment and pick out the closest one
-
-                var normal = null;
-                var target = null;
-                var worldRecord = 1000000;  // Start with a very high record distance that can easily be beaten
-
-                // Loop through all points of the path
-                for (var i = 0; i < p.length-1; i++) {
-
-                // Look at a line segment
-                var a = p[i];
-                var b = p[i+1];
-                //println(b);
-
-                // Get the normal point to that line
-                var normalPoint = getNormalPoint(predictLoc, a, b);
-                console.log('NormalPt', normalPoint);
-                console.log('PredictLoc', predictLoc);
-                // This only works because we know our path goes from left to right
-                // We could have a more sophisticated test to tell if the point is in the line segment or not
-                if (normalPoint.x < a.x || normalPoint.x > b.x) {
-                // This is something of a hacky solution, but if it's not within the line segment
-                // consider the normal to just be the end of the line segment (point b)
-                normalPoint = b.clone();
-                }
-
-                // How far away are we from the path?
-                var distance = predictLoc.distanceTo(normalPoint);
-                console.log('Distance', distance);
-                // Did we beat the record and find the closest line segment?
-                if (distance < worldRecord) {
-                worldRecord = distance;
-                // console.log('Record', worldRecord)
-                // If so the target we want to steer towards is the normal
-                normal = normalPoint;
-
-                // Look at the direction of the line segment so we can seek a little bit ahead of the normal
-                var b_ = b.clone()
-                var dir = b_.sub(a);
-                dir.normalize();
-                // This is an oversimplification
-                // Should be based on distance to path & velocity
-                dir.multiplyScalar(10);
-                target = normalPoint.clone();
-                target.add(dir);
-                }
-                }
-                // console.log(worldRecord);
-                // Only if the distance is greater than the path's radius do we bother to steer
-                if (worldRecord > pathradius && target !== null) {
-                this.seek(target);
-                }
-                };
-
-                // A method that calculates and applies a steering force towards a target
-                // STEER = DESIRED MINUS VELOCITY
-                this.seek = function(target) {
-                    var tgt = target.clone()
-                    var desired = tgt.sub(this.position);  // A vector pointing from the position to the target
-
-                    // If the magnitude of desired equals 0, skip out of here
-                    // (We could optimize this to check if x and y are 0 to avoid mag() square root
-                    if (desired.length() === 0) return;
-
-                    // Normalize desired and scale to maximum speed
-                    desired.normalize();
-                    desired.multiplyScalar(10);
-                    // Steering = Desired minus Velocity
-                    var desired_ = desired.clone();
-                    var steer = desired_.sub(this.velocity);
-                    // steer.limit(this.maxforce);  // Limit to maximum steering force
-                    console.log('Steer',steer);
-                    this.applyForce(steer);
-                };
-
-
-                var getNormalPoint = function(p, a, b) {
-                // Vector from a to p
-
-                var p_ = p.clone();
-                var a_ = a.clone();
-                var b_ = b.clone();
-                var ap = p_.sub(a_);
-                // Vector from a to b
-                var ab = b_.sub(a_);
-                ab.normalize(); // Normalize the line
-                // Project vector "diff" onto line by using the dot product
-                ab.multiplyScalar(ap.dot(ab));
-                var normalPoint = a_.add(ab);
-                return normalPoint;
-                };
-
+                    }                    
 
             }
+        }
+
+
+
+
 
         </script>
     </body>
