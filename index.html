@@ -1,13 +1,13 @@
-
 <!-- Gary Ang | Ming | playgrd -->
 <!-- three.js port of Daniel Shiffman's Nature of Code Chapter 2-->
-<!-- Wolfram CA in three.js -->
+<!-- Game of life in three.js -->
+
 
 <!DOCTYPE html>
 <html lang="en">
     <head>
         <meta charset="utf-8">
-        <title>Nature of Code port in three.js</title>
+        <title>Nature of Code in three.js</title>
         <style>
         </style>
         <script type="text/javascript" src="./libs/three.js"></script>
@@ -24,26 +24,23 @@
 
             
             var scene = new THREE.Scene();
-            var camera = new THREE.PerspectiveCamera( 150, window.innerWidth / window.innerHeight, 0.1, 1000 );
-            // var camera = new THREE.OrthographicCamera( 0,50,0,50, 0.1, 1000 );
-            camera.position.z = 400;
-            camera.position.x = 400;
-            camera.position.y = 400;
+            // var camera = new THREE.PerspectiveCamera( 1000, window.innerWidth / window.innerHeight, 0.1, 1000 );
+            var camera = new THREE.OrthographicCamera( 0,500,0,500, 0.1, 1000 );
+            camera.position.z = 30;
 
             var renderer = new THREE.WebGLRenderer( { antialias: true } );
             renderer.setPixelRatio( window.devicePixelRatio );
             renderer.setSize( window.innerWidth, window.innerHeight );
-            renderer.setClearColor( 0xFF9BDA, 1 );
+            renderer.setClearColor( 0xF9B3D1, 1 );
             document.body.appendChild( renderer.domElement );
 
             var orbit = new THREE.OrbitControls( camera, renderer.domElement );
             orbit.enableZoom = false;
 
-            var ambientLight  = new THREE.AmbientLight( '#FF9BDA' ),
-                hemiLight     = new THREE.HemisphereLight('#FF9BDA', '#FF9BDA', 1000 ),
-                light         = new THREE.PointLight( '#FF9BDA', 1, 1000 );
+            var ambientLight  = new THREE.AmbientLight( '#FFFFFF' ),
+                hemiLight     = new THREE.HemisphereLight('#FFFFFF', '#FFFFFF', 0 ),
+                light         = new THREE.PointLight( '#FFFFFF', 1, 100 );
 
-            ambientLight.position.set( 0, 0, 0 );
             hemiLight.position.set( 0, 0, 0 );
             light.position.set( 0, 0, 10 );
 
@@ -53,31 +50,24 @@
 
             var group = new THREE.Group();
 
-
-            var ruleset = new Array(0,1,0,1,1,0,1,0);
-
-            ca = new CA(ruleset, 750,750);
-
-            for (var i = 0; i<1000; i++ ){ca.generate();};
-
-            ca.display();
+            gol = new GOL(500,500);
+            gol.generate();
+            gol.display();
 
             scene.add( group );
 
             var prevFog = true;
 
-
             var render = function () {
 
                 requestAnimationFrame( render );
-
                 // orbit.update();
+                gol.generate();
+                gol.display();
 
-                
-
-                group.rotation.x += 0.002;
-                group.rotation.y += 0.002;
-                group.rotation.z += 0.002;
+                // group.rotation.x += 0.2;
+                // group.rotation.y += 0.2;
+                // group.rotation.z += 0.002;
 
 
                 renderer.render( scene, camera );
@@ -96,118 +86,123 @@
             render();
 
 
+            function Cell(x_, y_, w_) {
+                this.x = x_;
+                this.y = y_;
+                this.w = w_;
+                this.size = 1;
+                this.color = 0x000000;
+                var geometry = new THREE.SphereGeometry(this.size,10,10);
+                var material = new THREE.MeshToonMaterial({ color: this.color, opacity:0.5, transparent:true, wireframe:true, emissive: 0xFFB4E0,emissiveIntensity:0.1} );
+                var sphere = new THREE.Mesh(geometry, material);
+                group.add(sphere);
 
-            function CA(r, w, h) {
-            // How many generations?
-                this.generation = 0;
-                // An array to store the ruleset, for example [0,1,1,0,1,1,0,1]
-                this.ruleset = r;
-                this.w = 10;
-                this.cols = Math.floor(w/this.w);
-                this.rows = Math.floor(h/this.w);
+                this.state = Math.floor(random(2));
+                this.previous = this.state;
 
-                this.curveMatrix = [];
+                this.savePrevious = function() {
+                    this.previous = this.state;
+                };
 
-                // Store a history of generations in 2D array, not just one
-                this.matrix = new Array(this.cols);
-                for( var i = 0; i < this.cols; i++) {
-                    this.matrix[i] = new Array(this.rows);
+                this.newState = function(s) {
+                    this.state = s;
+                };
+
+                this.display = function() {
+                if (this.previous === 0 && this.state == 1) {
+                    this.color = 0x44688E;
+                    this.size = 2;
                 }
-                // console.log(this.matrix);
-                // Reset to generation 0
-                this.restart = function() {
-                    for (var i = 0; i < this.cols; i++) {
+                else if (this.state == 1) {
+                    this.color = 0x000000;
+                    this.size = 0.1;
+                }
+                else if (this.previous == 1 && this.state === 0) {
+                    this.color = 0xE7B730;
+                    this.size = 3;
+                }
+                else {
+                    this.color = 0xED6A5A;
+                    this.size = 4;
+                }
+                // console.log(this.color);
+
+                sphere.position.x = this.x;
+                sphere.position.y = this.y;
+                sphere.scale.x = this.size;
+                sphere.scale.y = this.size;
+                sphere.scale.z = this.size;
+                sphere.material.color.setHex(this.color);
+                // console.log(sphere.material.color);
+                };
+                }
+
+            function GOL(width,height) {
+
+                this.w = 10;
+                this.width = width;
+                this.height = height;
+                this.columns = this.width/this.w;
+                this.rows = this.height/this.w;
+
+                // Game of life board
+                this.board = new Array(this.columns);
+                for (var i = 0; i < this.columns; i++) {
+                    this.board[i] = new Array(this.rows);
+                }
+
+                this.init = function() {
+                    for (var i = 0; i < this.columns; i++) {
                         for (var j = 0; j < this.rows; j++) {
-                            this.matrix[i][j] = 0;
+                            this.board[i][j] = new Cell(i*this.w, j*this.w, this.w);
                         }
                     }
-                    // console.log(this.matrix[floor(this.cols/2)][0]);
-                    this.matrix[floor(this.cols/2)][0] = 1;    // We arbitrarily start with just the middle cell having a state of "1"
-                    this.generation = 0;
                 };
-
-                this.restart();
-
-                // Make a random ruleset
-                this.randomize = function() {
-                    for (var i = 0; i < 8; i++) {
-                        this.ruleset[i] = Math.floor(random(2));
-                    }
-                };
+            
+                this.init();
 
                 // The process of creating the new generation
                 this.generate = function() {
-
-                // For every spot, determine new state by examing current state, and neighbor states
-                // Ignore edges that only have one neighor
-                    for (var i = 0; i < this.cols; i++) {
-                        var left  = this.matrix[(i+this.cols-1)%this.cols][this.generation%this.rows];   // Left neighbor state
-                        var me    = this.matrix[i][this.generation%this.rows];       // Current state
-                        var right = this.matrix[(i+1)%this.cols][this.generation%this.rows];  // Right neighbor state
-                        this.matrix[i][(this.generation+1)%this.rows] = this.rules(left, me, right); // Compute next generation state based on ruleset
+                    for ( var i = 0; i < this.columns;i++) {
+                        for ( var j = 0; j < this.rows;j++) {
+                            this.board[i][j].savePrevious();
+                        }
                     }
-                    this.generation++;
 
-                    // console.log(this.matrix);
+                // Loop through every spot in our 2D array and check spots neighbors
+                    for (var x = 0; x < this.columns; x++) {
+                        for (var y = 0; y < this.rows; y++) {
+
+                        // Add up all the states in a 3x3 surrounding grid
+                        var neighbors = 0;
+                            for (var i = -1; i <= 1; i++) {
+                                for (var j = -1; j <= 1; j++) {
+                                    neighbors += this.board[(x+i+this.columns)%this.columns][(y+j+this.rows)%this.rows].previous;
+                                }
+                        }
+
+                        // A little trick to subtract the current cell's state since
+                        // we added it in the above loop
+                        neighbors -= this.board[x][y].previous;
+
+                        // Rules of Life
+                        if      ((this.board[x][y].state == 1) && (neighbors <  2)) this.board[x][y].newState(0);
+                        else if ((this.board[x][y].state == 1) && (neighbors >  3)) this.board[x][y].newState(0);
+                        else if ((this.board[x][y].state === 0) && (neighbors == 3)) this.board[x][y].newState(1);
+                        // else do nothing!
+                        }
+                    }
                 };
 
                 // This is the easy part, just draw the cells, fill 255 for '1', fill 0 for '0'
                 this.display = function() {
-                    var offset = this.generation%this.rows;
-                    // var offset = 0;
-
-                    for (var i = 0; i < this.cols; i++) {
-                        for (var j = 0; j < this.rows; j++) {
-                            var y = j - offset;
-                            if (y <= 0) y = this.rows + y;
-                            // Only draw if cell state is 1
-                            if (this.matrix[i][j] == 1) {
-                                this.curveMatrix.push(new THREE.Vector3(i*this.w, (y-1)*this.w, 0).multiplyScalar(1))
-                                // rect(i*this.w, (y-1)*this.w, this.w, this.w);
-                            }
+                    for ( var i = 0; i < this.columns;i++) {
+                        for ( var j = 0; j < this.rows;j++) {
+                            this.board[i][j].display();
                         }
                     }
-                    // console.log(this.curveMatrix);
-                    var geometry = new THREE.Geometry();
-                    for (var i=0; i<this.curveMatrix.length; i++){
-                        geometry.vertices.push(this.curveMatrix[i])
                     };
-                    var pcMat = new THREE.PointsMaterial();
-                    pcMat.color = new THREE.Color(0xFF9BDA);
-                    pcMat.transparent = true;
-                    pcMat.size = 2;
-                    pcMat.blending = THREE.AdditiveBlending;
-
-                    var pc = new THREE.Points(geometry, pcMat);
-                    pc.sizeAttenuation = true;
-                    pc.sortPoints = true;
-
-                    group.add(pc);
-
-                };
-
-                // Implementing the Wolfram rules
-                // This is the concise conversion to binary way
-                this.rules = function(a, b, c) {
-                    var s = "" + a + b + c;
-                    var index = parseInt(s, 2);
-                    return this.ruleset[index];
-                };
-
-            // The CA is done if it reaches the bottom of the screen
-                this.finished = function() {
-                    if (this.generation > height/this.w) {
-                        return true;
-                    }
-                else {
-                    return false;
-                }
-                };
             }
-
-
-
-
 
 
         </script>
