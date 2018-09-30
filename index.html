@@ -1,13 +1,13 @@
 <!-- Gary Ang | Ming | playgrd -->
 <!-- playgrd.com -->
 <!-- three.js port of Daniel Shiffman's Nature of Code Chapter 2-->
-<!-- Particle System -->
+<!-- Flowfield -->
 
 <!DOCTYPE html>
 <html lang="en">
     <head>
         <meta charset="utf-8">
-        <title>Nature of Code port in three.js</title>
+        <title>three.js base</title>
         <style>
         </style>
         <script type="text/javascript" src="./libs/three.js"></script>
@@ -24,9 +24,11 @@
             var p5 = new p5();
 
             var scene = new THREE.Scene();
-            // var camera = new THREE.PerspectiveCamera( 1000, window.innerWidth / window.innerHeight, 0.1, 1000 );
-            var camera = new THREE.OrthographicCamera( 0,1000,0,1000, 0.1, 1000 );
-            camera.position.z = 100;
+            var camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 0.1, 1000 );
+            // var camera = new THREE.OrthographicCamera( 0,50,0,50, 0.1, 1000 );
+            camera.position.z = 75;
+            camera.position.x = -75;
+            camera.position.y = -75;
 
             var renderer = new THREE.WebGLRenderer( { antialias: true } );
             renderer.setPixelRatio( window.devicePixelRatio );
@@ -51,27 +53,33 @@
 
             var group = new THREE.Group();
 
-            var ps = new ParticleSystem(new THREE.Vector2(500,0));
+            mover = new Mover();
+            mover.display();
+            mover.initialise();
 
             scene.add( group );
 
             var prevFog = true;
 
-            var id;
+            var wind = new THREE.Vector2(-10,0);
+            var gravity = new THREE.Vector2(0,0.000001);
+
+            var flowfield = new FlowField(50,50,4);
 
             var render = function () {
 
-                id = requestAnimationFrame( render );
+                requestAnimationFrame( render );
                 orbit.update();
-
-                ps.addParticle();
-                ps.run();
-                
+                mover.display();
+                mover.applyForce(wind);
+                // mover.applyForce(gravity);
+                mover.follow(flowfield);
+                mover.update();
+                mover.checkEdges();
+                flowfield.display();
                 // group.rotation.x += 0.002;
-                // group.rotation.y += 0.002;
+                // group.rotation.y += 0.02;
                 // group.rotation.z += 0.002;
-
-                console.log(group);
 
                 renderer.render( scene, camera );
 
@@ -89,68 +97,165 @@
             render();
 
 
-            function Particle(position) {
-                this.acceleration = new THREE.Vector2(0, 0.05);
-                this.velocity = new THREE.Vector2(Math.random(), Math.random());
-                this.position = position.clone();
-                this.lifespan = 10000.0;
 
-                var geometry = new THREE.SphereGeometry(2,10,10);
-                var material = new THREE.MeshToonMaterial({ color: 0xFFF3EF, opacity:0.9, transparent:true, wireframe:false, emissive: 0xFFF3EF,emissiveIntensity:0.5} );
+            function Mover() {
+                this.position = new THREE.Vector2();
+                this.velocity = new THREE.Vector2();
+                this.acceleration = new THREE.Vector2();
+                this.max = new THREE.Vector2(50,50);
+                this.min = new THREE.Vector2(-50,-50);
+                this.mass = 10;
+
+                var geometry = new THREE.SphereGeometry(1,10,10);
+                var material = new THREE.MeshToonMaterial({ color: 0xFFF3EF, opacity:0.5, transparent:true, wireframe:true, emissive: 0xFFF3EF,emissiveIntensity:0.1} );
                 var sphere = new THREE.Mesh(geometry, material);
                 group.add(sphere);
 
-              this.run = function() {
-                this.update();
-                this.display();
-                // console.log('Test');
-              };
-
-              // Method to update position
-              this.update = function(){
-                this.velocity.add(this.acceleration);
-                this.position.add(this.velocity);
-                this.lifespan -= 2;
-              };
-
-              // Method to display
-              this.display = function() {
-                sphere.position.x = this.position.x;
-                sphere.position.y = this.position.y;
-              };
-
-              this.remove = function(){
-                group.remove(sphere);
-              };
-
-              // Is the particle still useful?
-              this.isDead = function(){
-                if (this.lifespan < 0.0) {
-                  return true;
-                } else {
-                  return false;
+                this.initialise = function() {
+                    
+                    this.position.x = 25;
+                    this.position.y = 25;
+                    this.velocity.x = 0.1;
+                    this.velocity.y = 0.1;
+                    this.acceleration.x = 0.0;
+                    this.acceleration.y = 0.0;
+                    // console.log('Initialise', this.position);                    
                 }
-              };
-            };
 
-            function ParticleSystem(position) {
-                this.origin = position.clone();
-                this.particles = [];
+                this.follow = function(flow) {
+                    // What is the vector at that spot in the flow field?
+                    var desired = flow.lookup(this.position);
+                    
+                    // Scale it up by maxspeed
+                    // desired.multiplyScalar(10);
+                    // console.log('Desired',desired);
+                    // Steering is desired minus velocity
+                    var steer = desired.sub(this.velocity);
 
-              this.addParticle = function() {
-                this.particles.push(new Particle(this.origin));
-              };
+                    // steer.limit(this.maxforce);  // Limit to maximum steering force
+                    this.applyForce(steer);
+                };
 
-              this.run = function() {
-                for (var i = this.particles.length-1; i >= 0; i--) {
-                  var p = this.particles[i];
-                  p.run();
-                  if (p.isDead()) {
-                    this.particles.splice(i, 1);
-                    p.remove();
-                  }
+                this.applyForce = function(force){
+                    var f = force.divideScalar(this.mass);
+                    this.acceleration.add(f);
                 }
-              };
+
+
+                this.update = function() {
+                    
+                    this.velocity.add(this.acceleration);
+                    this.velocity.clamp(this.min, this.max);
+                    this.position.add(this.velocity);
+                    this.acceleration.multiplyScalar(0);
+                    // console.log('Position', this.position);
+
+                }
+
+                this.display = function(){
+                    sphere.position.x = this.position.x;
+                    sphere.position.y = this.position.y;
+                    // console.log(sphere.position);
+
+                }
+
+                this.checkEdges = function() {
+                    if (this.position.x > 50){
+                        this.position.x = 50;
+                        this.velocity.x *= -1;
+                        // console.log(this.velocity);
+
+                    }
+                    else if (this.position.x < 0){
+                        this.position.x = 0;
+                        this.velocity.x *= -1;
+                        // console.log('HIT');
+
+                    }
+
+                    if (this.position.y > 50){
+                        this.position.y = 50;
+                        this.velocity.y *= -1;
+                    }
+                    else if (this.position.y < 0){
+                        this.position.y = 0;
+                        this.velocity.y *= -1;
+                    }                    
+                }
+
+                this.check = function(){
+                    sphere.position.x = 0;
+                    sphere.position.y = 0;
+                }
+
+            }
+
+            function FlowField(width,height,r) {
+                this.resolution = r;
+                this.cols = width/this.resolution;
+                this.rows = height/this.resolution;
+
+                this.make2Darray = function(n){
+                    var array = [];
+                    for (var i=0; i<n; i++){
+                        array[i] = [];
+                    }
+                    return array;
+                };
+
+                this.field = this.make2Darray(this.cols);
+
+                this.init = function(){
+                    // noise.seed(Math.random());
+                    var xoff = 0;
+                    for (var i=0; i<this.cols; i++){
+                        var yoff = 0;
+                        for (var j=0; j<this.rows; j++){
+                            var theta = p5.map(p5.noise(xoff, yoff),0,1,0,Math.PI*2);
+                            this.field[i][j] = new THREE.Vector3(Math.cos(theta),Math.sin(theta),0);
+                            yoff +=0.1;
+                        }
+                        xoff +=0.1;
+                    }
+                }
+
+                this.init();
+
+                this.lookup = function(lookup) {
+                    // var column = Math.floor(p5.constrain(lookup.x/this.resolution,0,this.cols-1));
+                    // var row = Math.floor(p5.constrain(lookup.y/this.resolution,0,this.rows-1));
+                    // console.log(lookup.x,lookup.y);
+                    var column = Math.floor(lookup.x/this.resolution);
+                    var row = Math.floor(lookup.y/this.resolution);
+                    //println(lookup.x);
+                    // console.log(column,row);
+                    return this.field[column][row].clone();
+                };
+
+                this.display = function(){
+                    for (var i = 0; i < this.cols; i++) {
+                        for (var j = 0; j < this.rows; j++) {
+                            drawDirection(this.field[i][j], i*this.resolution, j*this.resolution)
+                        }
+                    }
+                }
+
+                var drawDirection = function(v,x,y) {
+                    var dir = v;
+
+                    //normalize the direction vector (convert to vector of length 1)
+                    dir.normalize();
+
+                    var origin = new THREE.Vector3( x, y, 0 );
+                    var length = 3;
+                    var hex = 0xffffff;
+
+                    var arrowHelper = new THREE.ArrowHelper( dir, origin, length, hex );
+                    group.add(arrowHelper);               
+                }
+
+
+
             };
 
 
