@@ -1,7 +1,6 @@
 <!-- Gary Ang | Ming | playgrd -->
 <!-- three.js port of Daniel Shiffman's Nature of Code Chapter 2-->
-<!-- Game of life in three.js -->
-
+<!-- Recursive circles in three.js -->
 
 <!DOCTYPE html>
 <html lang="en">
@@ -22,11 +21,12 @@
         <script>
             var p5 = new p5();
 
-            
             var scene = new THREE.Scene();
-            // var camera = new THREE.PerspectiveCamera( 1000, window.innerWidth / window.innerHeight, 0.1, 1000 );
-            var camera = new THREE.OrthographicCamera( 0,500,0,500, 0.1, 1000 );
-            camera.position.z = 30;
+            var camera = new THREE.PerspectiveCamera( 1000, window.innerWidth / window.innerHeight, 0.1, 1000 );
+            // var camera = new THREE.OrthographicCamera( 0,500,0,500, 0.1, 1000 );
+            camera.position.z = 400;
+            camera.position.x = 0;
+            camera.position.y = 250;
 
             var renderer = new THREE.WebGLRenderer( { antialias: true } );
             renderer.setPixelRatio( window.devicePixelRatio );
@@ -50,24 +50,19 @@
 
             var group = new THREE.Group();
 
-            gol = new GOL(500,500);
-            gol.generate();
-            gol.display();
-
             scene.add( group );
 
             var prevFog = true;
+
+            drawCircle(250,250,100);
 
             var render = function () {
 
                 requestAnimationFrame( render );
                 // orbit.update();
-                gol.generate();
-                gol.display();
-
-                // group.rotation.x += 0.2;
-                // group.rotation.y += 0.2;
-                // group.rotation.z += 0.002;
+                group.rotation.x += 0.004;
+                group.rotation.y += 0.004;
+                group.rotation.z += 0.004;
 
 
                 renderer.render( scene, camera );
@@ -86,122 +81,20 @@
             render();
 
 
-            function Cell(x_, y_, w_) {
-                this.x = x_;
-                this.y = y_;
-                this.w = w_;
-                this.size = 1;
-                this.color = 0x000000;
-                var geometry = new THREE.SphereGeometry(this.size,10,10);
-                var material = new THREE.MeshToonMaterial({ color: this.color, opacity:0.5, transparent:true, wireframe:true, emissive: 0xFFB4E0,emissiveIntensity:0.1} );
+            function drawCircle(x,y,radius){
+                var geometry = new THREE.SphereGeometry(radius,10,10);
+                var material = new THREE.MeshToonMaterial({ color: this.color, opacity:0.2, transparent:true, wireframe:true, emissive: 0xFFB4E0,emissiveIntensity:0.1} );
                 var sphere = new THREE.Mesh(geometry, material);
                 group.add(sphere);
-
-                this.state = Math.floor(random(2));
-                this.previous = this.state;
-
-                this.savePrevious = function() {
-                    this.previous = this.state;
-                };
-
-                this.newState = function(s) {
-                    this.state = s;
-                };
-
-                this.display = function() {
-                if (this.previous === 0 && this.state == 1) {
-                    this.color = 0x44688E;
-                    this.size = 2;
+                sphere.position.x = x;
+                sphere.position.y = y;
+                if (radius > 8) {
+                    // Four circles! left right, up and down
+                    drawCircle(x + radius, y, radius/2);
+                    drawCircle(x - radius, y, radius/2);
+                    drawCircle(x, y + radius, radius/2);
+                    drawCircle(x, y - radius, radius/2);
                 }
-                else if (this.state == 1) {
-                    this.color = 0x000000;
-                    this.size = 0.1;
-                }
-                else if (this.previous == 1 && this.state === 0) {
-                    this.color = 0xE7B730;
-                    this.size = 3;
-                }
-                else {
-                    this.color = 0xED6A5A;
-                    this.size = 4;
-                }
-                // console.log(this.color);
-
-                sphere.position.x = this.x;
-                sphere.position.y = this.y;
-                sphere.scale.x = this.size;
-                sphere.scale.y = this.size;
-                sphere.scale.z = this.size;
-                sphere.material.color.setHex(this.color);
-                // console.log(sphere.material.color);
-                };
-                }
-
-            function GOL(width,height) {
-
-                this.w = 10;
-                this.width = width;
-                this.height = height;
-                this.columns = this.width/this.w;
-                this.rows = this.height/this.w;
-
-                // Game of life board
-                this.board = new Array(this.columns);
-                for (var i = 0; i < this.columns; i++) {
-                    this.board[i] = new Array(this.rows);
-                }
-
-                this.init = function() {
-                    for (var i = 0; i < this.columns; i++) {
-                        for (var j = 0; j < this.rows; j++) {
-                            this.board[i][j] = new Cell(i*this.w, j*this.w, this.w);
-                        }
-                    }
-                };
-            
-                this.init();
-
-                // The process of creating the new generation
-                this.generate = function() {
-                    for ( var i = 0; i < this.columns;i++) {
-                        for ( var j = 0; j < this.rows;j++) {
-                            this.board[i][j].savePrevious();
-                        }
-                    }
-
-                // Loop through every spot in our 2D array and check spots neighbors
-                    for (var x = 0; x < this.columns; x++) {
-                        for (var y = 0; y < this.rows; y++) {
-
-                        // Add up all the states in a 3x3 surrounding grid
-                        var neighbors = 0;
-                            for (var i = -1; i <= 1; i++) {
-                                for (var j = -1; j <= 1; j++) {
-                                    neighbors += this.board[(x+i+this.columns)%this.columns][(y+j+this.rows)%this.rows].previous;
-                                }
-                        }
-
-                        // A little trick to subtract the current cell's state since
-                        // we added it in the above loop
-                        neighbors -= this.board[x][y].previous;
-
-                        // Rules of Life
-                        if      ((this.board[x][y].state == 1) && (neighbors <  2)) this.board[x][y].newState(0);
-                        else if ((this.board[x][y].state == 1) && (neighbors >  3)) this.board[x][y].newState(0);
-                        else if ((this.board[x][y].state === 0) && (neighbors == 3)) this.board[x][y].newState(1);
-                        // else do nothing!
-                        }
-                    }
-                };
-
-                // This is the easy part, just draw the cells, fill 255 for '1', fill 0 for '0'
-                this.display = function() {
-                    for ( var i = 0; i < this.columns;i++) {
-                        for ( var j = 0; j < this.rows;j++) {
-                            this.board[i][j].display();
-                        }
-                    }
-                    };
             }
 
 
