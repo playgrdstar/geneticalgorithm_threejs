@@ -1,15 +1,13 @@
+
 <!-- Gary Ang | Ming | playgrd -->
-<!-- playgrd.com -->
 <!-- three.js port of Daniel Shiffman's Nature of Code Chapter 2-->
-<!-- Separate and seek selected sphere, which will turn red when moused over -->
-
-
+<!-- Wolfram CA in three.js -->
 
 <!DOCTYPE html>
 <html lang="en">
     <head>
         <meta charset="utf-8">
-        <title>Nature of Code in three.js</title>
+        <title>Nature of Code port in three.js</title>
         <style>
         </style>
         <script type="text/javascript" src="./libs/three.js"></script>
@@ -22,31 +20,32 @@
 
     <div id='svg'></div>
         <script>
-// http://jsfiddle.net/jayfield1979/qGPTT/2/
             var p5 = new p5();
-            
 
+            
             var scene = new THREE.Scene();
-            // var camera = new THREE.PerspectiveCamera( 1000, window.innerWidth / window.innerHeight, 0.1, 1000 );
-            var camera = new THREE.OrthographicCamera( -10,60,-10,60, 0.1, 1000 );
-            camera.position.z = 50;
+            var camera = new THREE.PerspectiveCamera( 150, window.innerWidth / window.innerHeight, 0.1, 1000 );
+            // var camera = new THREE.OrthographicCamera( 0,50,0,50, 0.1, 1000 );
+            camera.position.z = 400;
+            camera.position.x = 400;
+            camera.position.y = 400;
 
             var renderer = new THREE.WebGLRenderer( { antialias: true } );
             renderer.setPixelRatio( window.devicePixelRatio );
             renderer.setSize( window.innerWidth, window.innerHeight );
-            renderer.setClearColor( 0xF9B3D1, 1 );
+            renderer.setClearColor( 0xFF9BDA, 1 );
             document.body.appendChild( renderer.domElement );
 
             var orbit = new THREE.OrbitControls( camera, renderer.domElement );
             orbit.enableZoom = false;
 
-            var ambientLight  = new THREE.AmbientLight( '#D63AF9', 100),
-                hemiLight     = new THREE.HemisphereLight('#D63AF9', '#2F1847', 1),
-                light         = new THREE.PointLight( '#D63AF9', 10, 100 );
+            var ambientLight  = new THREE.AmbientLight( '#FF9BDA' ),
+                hemiLight     = new THREE.HemisphereLight('#FF9BDA', '#FF9BDA', 1000 ),
+                light         = new THREE.PointLight( '#FF9BDA', 1, 1000 );
 
             ambientLight.position.set( 0, 0, 0 );
-            hemiLight.position.set( 10, 10, 10 );
-            light.position.set( 10, 10, 10 );
+            hemiLight.position.set( 0, 0, 0 );
+            light.position.set( 0, 0, 10 );
 
             scene.add( ambientLight ); 
             scene.add( hemiLight );
@@ -54,75 +53,32 @@
 
             var group = new THREE.Group();
 
-            // mover = new Mover();
-            // // mover.display();
-            // mover.initialise();
 
-            var movers = [];
+            var ruleset = new Array(0,1,0,1,1,0,1,0);
 
-            for (var i = 0; i < 100; i++) {
-                var mover = new Mover();
-                mover.initialise();
-                movers.push(mover);
-            }
-            console.log(movers)
+            ca = new CA(ruleset, 750,750);
+
+            for (var i = 0; i<1000; i++ ){ca.generate();};
+
+            ca.display();
+
             scene.add( group );
 
             var prevFog = true;
 
-            var raycaster = new THREE.Raycaster();
-            var mouse = new THREE.Vector2();
 
-            function onMouseMove( event ) {
-
-                // calculate mouse position in normalized device coordinates
-                // (-1 to +1) for both components
-
-                mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-                mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
-
-                // console.log(mouse);
-
-            }
-            document.addEventListener('mousemove', onMouseMove, false);
-
-            // var wind = new THREE.Vector2(0.1,0);
-            // var gravity = new THREE.Vector2(0,0.000001);
-
-            var pos = new THREE.Vector3();
             var render = function () {
 
                 requestAnimationFrame( render );
+
                 // orbit.update();
-                for (var i = 0; i < 50; i++) {
-                    movers[i].checkEdges();
-                    movers[i].applyBehaviors();
-                    movers[i].update();
-                    
-                    movers[i].display();
-                }
 
-                // update the picking ray with the camera and mouse position
-                raycaster.setFromCamera( mouse, camera );
-                // console.log('Children', scene.children[3].children);
-
-                // calculate objects intersecting the picking ray
-                var intersects = raycaster.intersectObjects( scene.children[3].children );
-
-                for ( var i = 0; i < intersects.length; i++ ) {
-
-                    intersects[ i ].object.material.color.set( 0xff0000 );
-                    pos = intersects[ i ].object.position;
-                    // console.log("hit", pos);
-
-                }
                 
-                // mover.applyForce(wind);
-                // mover.applyForce(gravity);
 
-                // group.rotation.x += 0.002;
-                // group.rotation.y += 0.02;
-                // group.rotation.z += 0.002;
+                group.rotation.x += 0.002;
+                group.rotation.y += 0.002;
+                group.rotation.z += 0.002;
+
 
                 renderer.render( scene, camera );
 
@@ -141,135 +97,114 @@
 
 
 
-            function Mover() {
-                this.position = new THREE.Vector3();
-                this.velocity = new THREE.Vector3();
-                this.acceleration = new THREE.Vector3();
+            function CA(r, w, h) {
+            // How many generations?
+                this.generation = 0;
+                // An array to store the ruleset, for example [0,1,1,0,1,1,0,1]
+                this.ruleset = r;
+                this.w = 10;
+                this.cols = Math.floor(w/this.w);
+                this.rows = Math.floor(h/this.w);
 
-                this.r = 12;
-                this.maxspeed = 3;
-                this.maxforce = 0.2;
+                this.curveMatrix = [];
 
-                var geometry = new THREE.SphereGeometry(1,10,10);
-                var material = new THREE.MeshToonMaterial({ color: 0xffffff, opacity:0.5, transparent:true, wireframe:true, emissive: 0xffffff,emissiveIntensity:0.1} );
-                var sphere = new THREE.Mesh(geometry, material);
-                group.add(sphere);
-
-                this.initialise = function() {
-                    
-                    this.position.x = Math.random()*25;
-                    this.position.y = Math.random()*10;
-                    this.velocity.x = 0.1;
-                    this.velocity.y = 0.1;
-                    this.acceleration.x = 0.0;
-                    this.acceleration.y = 0.0;
-                    this.mass = 100;
-                    // console.log('Initialise', this.position);                    
+                // Store a history of generations in 2D array, not just one
+                this.matrix = new Array(this.cols);
+                for( var i = 0; i < this.cols; i++) {
+                    this.matrix[i] = new Array(this.rows);
                 }
-
-                this.applyBehaviors = function(movers) {
-                    var separateForce = this.separate(movers);
-                    // var vector = new THREE.Vector3(25, 25, 0);
-                    var seekForce = this.seek(pos);
-                    seekForce.divideScalar(2);
-                    this.applyForce(separateForce);
-                    this.applyForce(seekForce);
-                };
-
-
-                this.applyForce = function(force){
-                    var f = force.divideScalar(this.mass);
-                    this.acceleration.add(f);
-                }
-
-                this.separate = function(vehicles) {
-                    var desiredseparation = 2;
-                    var sum = new THREE.Vector3();
-                    var count = 0;
-                    // For every boid in the system, check if it's too close
-                    for (var i = 0; i < movers.length; i++) {
-                        var d = this.position.distanceTo(movers[i].position);
-                        // If the distance is greater than 0 and less than an arbitrary amount (0 when you are yourself)
-                        if ((d > 0) && (d < desiredseparation)) {
-                            // Calculate vector pointing away from neighbor
-                            var pos = this.position.clone();
-                            var diff = pos.sub(movers[i].position);
-                            diff.normalize();
-                            diff.divideScalar(d);        // Weight by distance
-                            sum.add(diff);
-                            count++;            // Keep track of how many
+                // console.log(this.matrix);
+                // Reset to generation 0
+                this.restart = function() {
+                    for (var i = 0; i < this.cols; i++) {
+                        for (var j = 0; j < this.rows; j++) {
+                            this.matrix[i][j] = 0;
                         }
                     }
-                    // Average -- divide by how many
-                    if (count > 0) {
-                    sum.divideScalar(count);
-                    // Our desired vector is the average scaled to maximum speed
-                    sum.normalize();
-                    sum.multiplyScalar(this.maxspeed);
-                    // Implement Reynolds: Steering = Desired - Velocity
-                    sum.sub(this.velocity);
-                    // sum.limit(this.maxforce);
-                    }
-                    return sum;
+                    // console.log(this.matrix[floor(this.cols/2)][0]);
+                    this.matrix[floor(this.cols/2)][0] = 1;    // We arbitrarily start with just the middle cell having a state of "1"
+                    this.generation = 0;
                 };
 
-                this.seek = function(target) {
-                    var tgt = target.clone();
-                    var desired = tgt.sub(this.position);  // A vector pointing from the location to the target
+                this.restart();
 
-                    // Normalize desired and scale to maximum speed
-                    desired.normalize();
-                    desired.multiplyScalar(this.maxspeed);
-                    des = desired.clone();
-                    // Steering = Desired minus velocity
-                    var steer = des.sub(this.velocity);
-                    // steer.limit(this.maxforce);  // Limit to maximum steering force
-                    return steer;
+                // Make a random ruleset
+                this.randomize = function() {
+                    for (var i = 0; i < 8; i++) {
+                        this.ruleset[i] = Math.floor(random(2));
+                    }
                 };
 
+                // The process of creating the new generation
+                this.generate = function() {
 
-                this.update = function() {
-                    
-                    this.velocity.add(this.acceleration);
-                    // this.velocity.clamp(this.min, this.max);
-                    this.position.add(this.velocity);
-                    this.acceleration.multiplyScalar(0);
-                    // console.log('Position', this.position);
+                // For every spot, determine new state by examing current state, and neighbor states
+                // Ignore edges that only have one neighor
+                    for (var i = 0; i < this.cols; i++) {
+                        var left  = this.matrix[(i+this.cols-1)%this.cols][this.generation%this.rows];   // Left neighbor state
+                        var me    = this.matrix[i][this.generation%this.rows];       // Current state
+                        var right = this.matrix[(i+1)%this.cols][this.generation%this.rows];  // Right neighbor state
+                        this.matrix[i][(this.generation+1)%this.rows] = this.rules(left, me, right); // Compute next generation state based on ruleset
+                    }
+                    this.generation++;
 
+                    // console.log(this.matrix);
+                };
+
+                // This is the easy part, just draw the cells, fill 255 for '1', fill 0 for '0'
+                this.display = function() {
+                    var offset = this.generation%this.rows;
+                    // var offset = 0;
+
+                    for (var i = 0; i < this.cols; i++) {
+                        for (var j = 0; j < this.rows; j++) {
+                            var y = j - offset;
+                            if (y <= 0) y = this.rows + y;
+                            // Only draw if cell state is 1
+                            if (this.matrix[i][j] == 1) {
+                                this.curveMatrix.push(new THREE.Vector3(i*this.w, (y-1)*this.w, 0).multiplyScalar(1))
+                                // rect(i*this.w, (y-1)*this.w, this.w, this.w);
+                            }
+                        }
+                    }
+                    // console.log(this.curveMatrix);
+                    var geometry = new THREE.Geometry();
+                    for (var i=0; i<this.curveMatrix.length; i++){
+                        geometry.vertices.push(this.curveMatrix[i])
+                    };
+                    var pcMat = new THREE.PointsMaterial();
+                    pcMat.color = new THREE.Color(0xFF9BDA);
+                    pcMat.transparent = true;
+                    pcMat.size = 2;
+                    pcMat.blending = THREE.AdditiveBlending;
+
+                    var pc = new THREE.Points(geometry, pcMat);
+                    pc.sizeAttenuation = true;
+                    pc.sortPoints = true;
+
+                    group.add(pc);
+
+                };
+
+                // Implementing the Wolfram rules
+                // This is the concise conversion to binary way
+                this.rules = function(a, b, c) {
+                    var s = "" + a + b + c;
+                    var index = parseInt(s, 2);
+                    return this.ruleset[index];
+                };
+
+            // The CA is done if it reaches the bottom of the screen
+                this.finished = function() {
+                    if (this.generation > height/this.w) {
+                        return true;
+                    }
+                else {
+                    return false;
                 }
-
-                this.display = function(){
-                    sphere.position.x = this.position.x;
-                    sphere.position.y = this.position.y;
-                    // console.log(sphere.position);
-
-                }
-
-                this.checkEdges = function() {
-                    if (this.position.x > 50){
-                        this.position.x = 50;
-                        this.velocity.x *= -1;
-                        // console.log(this.velocity);
-
-                    }
-                    else if (this.position.x < 0){
-                        this.position.x = 0;
-                        this.velocity.x *= -1;
-                        // console.log('HIT');
-
-                    }
-
-                    if (this.position.y > 50){
-                        this.position.y = 50;
-                        this.velocity.y *= -1;
-                    }
-                    else if (this.position.y < 0){
-                        this.position.y = 0;
-                        this.velocity.y *= -1;
-                    }                    
-
+                };
             }
-        }
+
 
 
 
